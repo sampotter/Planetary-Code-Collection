@@ -1,19 +1,20 @@
-program toposhadows
+PROGRAM toposhadows
 !***********************************************************************
 ! calculates horizon for every location and every azimuth
 !
-! written by Norbert Schorghofer 2010-2018
+! written by Norbert Schorghofer 2010-2019
 !***********************************************************************
   use filemanager, only : NSx,NSy,fileext,dx,dy,RMAX
   use allinterfaces
-  use newmultigrid
+  use multigrid
+  use azRays, only : naz  ! specify # azimuths at top of shadow_subs.f90
   implicit none
   real(8), parameter :: pi=3.1415926535897932
   integer i, j, narg, ilower, iupper, LACT, LMAX
-  integer, parameter :: naz=180      ! # of azimuths
+  !integer, parameter :: naz=180      ! # of azimuths
   real(8) h(NSx,NSy), smax(naz)
   character(5) extc
-  logical :: MULTIGRID = .true.
+  logical :: MULTIGRIDON = .true.
   real(8) RMG   ! distance of finest multigrid transition
   
   narg = COMMAND_ARGUMENT_COUNT()
@@ -28,16 +29,16 @@ program toposhadows
   print *,'# azimuth rays = ',naz
   print *,'# fully sampled radius =',min(dx,dy)*naz/(2*pi)
 
-  if (MULTIGRID) then
+  if (MULTIGRIDON) then
      RMG = naz*min(dx,dy)/(2*pi)
-     print *,'# multgrid transition radius RMG =',RMG
+     print *,'# multigrid transition radius RMG =',RMG
      print *,'# grid levels =',ceiling(log(max(NSx*dx,NSy*dy)/RMG)/log(2.))
      LMAX = floor(log(sqrt((NSx*dx)**2+(NSy*dy)**2)/RMG)/log(2.))
      print *,'# log2(domain size/RMG) =',LMAX
      LMAX = min(10,LMAX)
      call downsample_all(h,LMAX,LACT)
      LMAX = min(LACT,LMAX)
-     print *,'# levels allocated = ',LMAX
+     print *,'# levels allocated =',LMAX
      
   else
      print *,'# cutoff radius RMAX =',RMAX
@@ -61,8 +62,9 @@ program toposhadows
   do i=ilower,iupper
      print *,i
      do j=2,NSy-1
-        if (.not.MULTIGRID) then
-           call findallhorizon(h,i,j,naz,smax)
+        if (.not.MULTIGRIDON .or. LMAX==1) then
+           !call findallhorizon(h,i,j,naz,smax)
+           call findallhorizon1(h,i,j,naz,smax)
         else
            call findallhorizon_MGR(h,i,j,naz,smax,RMG,LMAX)
         endif
@@ -72,4 +74,4 @@ program toposhadows
   enddo
   
   close(21)
-end program toposhadows
+END PROGRAM toposhadows

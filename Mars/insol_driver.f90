@@ -13,14 +13,12 @@ program insol_driver
   integer, parameter :: NP=1  ! number of input latitudes
   integer, parameter :: earliest=5000   ! start time (kyr)
   integer i, k, iargc, ierr
-  real(8) icetime, junk, ecc, omega, eps, timestep
+  real(8) icetime, ecc, omega, eps, timestep
   real(8), dimension(NP) :: latitude
   real(8), dimension(earliest+1) :: lasktime, laskecc, laskomega, laskeps
   character(10) ext
 
-  if (iargc() /= 1) then
-     stop 'USAGE: a.out ext'
-  endif
+  if (iargc() /= 1) stop 'USAGE: a.out ext'
   call getarg( 1, ext )
 
   open(unit=21,file='lats.'//ext,action='read',status='old',iostat=ierr)
@@ -29,16 +27,14 @@ program insol_driver
      stop
   endif
   do k=1,NP
-     !read(21,*) latitude(k),junk,junk
      read(21,*) latitude(k)
   enddo
   close(21)
-  junk = junk  ! avoids compiler warning
 
   !ecc = 0.0934;  eps = 25.19*d2r;  omega = 250.87*d2r
   ! Laskar orbital solution http://vo.imcce.fr/insola/earth/online/mars/La2003-04/
   open(20,file='INSOLN.LA2004.MARS.ASC',action='read',status='old')
-  do i=1,earliest+1
+  do i = 1,earliest+1
      read(20,*) lasktime(i),laskecc(i),laskeps(i),laskomega(i)
   enddo
   close(20)
@@ -54,7 +50,7 @@ program insol_driver
 
   open(unit=34,file='insol.'//ext,action='write',status='unknown')
 
-  do i=earliest,1,-1
+  do i = earliest,1,-1
      ecc = laskecc(i)
      omega = laskomega(i) + pi
      omega = mod(omega,2*pi)
@@ -69,7 +65,7 @@ end program insol_driver
 
 
 subroutine icesheet(icetime,NP,latitude,ecc,omega,eps)
-  ! this pass-through subroutine is only for similarity to big iceage code
+  ! pass-through subroutine for similarity to big iceage code
   use miscparameters
   implicit none
   integer, intent(IN) :: NP
@@ -93,7 +89,7 @@ subroutine insolonly_mars(latitude, ecc, omega, eps, Qmean, Q4, Qpeak)
   real(8), intent(IN) :: ecc
   real(8), intent(IN) :: omega, eps  ! [radians]
   real(8), intent(out) :: Qmean, Q4, Qpeak
-  real(8), parameter :: dt = 0.01
+  real(8), parameter :: dt = 0.01   ! [sol]
   real(8), parameter :: a = 1.52366 ! Mars semimajor axis [AU]
   integer nsteps, n
   real(8) time, Qn, tdays, marsR, marsLs, marsDec, HA

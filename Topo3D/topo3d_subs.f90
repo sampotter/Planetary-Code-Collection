@@ -1,4 +1,4 @@
-module newhorizons
+MODULE newhorizons
   ! reads and privately stores horizon data
   ! and contains functions that calculate values from horizons
   use filemanager, only : NSx, NSy, sfn
@@ -13,8 +13,16 @@ contains
     implicit none
     integer, intent(IN), optional :: Mx1,Mx2,My1,My2
     logical crop
-    integer i,j,ia,ja,ierr
+    integer i,j,ia,ja,ierr,naz2
     real(8) sread(naz)
+    integer, external :: countcolumns
+
+    naz2=countcolumns()-2
+    if (naz/=naz2) then
+      print *,'inconsistent number of azimuth rays',naz,naz2
+      stop
+    endif
+    print *,'number of azimuth rays= ',naz
 
     if (present(Mx1).and.present(Mx2).and.present(My1).and.present(My2)) then
        crop = .true.
@@ -56,7 +64,8 @@ contains
     
     s = atan(s)  ! slope -> angle
   end subroutine readhorizons
-    
+  
+  
   elemental function getonehorizon(i0,j0,azSun)
     ! returns elevation of horizon along azimuth azSun
     implicit none
@@ -66,6 +75,11 @@ contains
     real(8), parameter :: pi=3.1415926535897932
     integer k
     real(8) a, daz, smax
+
+    if (azSun/=azSun) then ! azSun can be NaN for zenith
+       getonehorizon = 0.
+       return
+    endif
     
     daz = 2*pi/real(naz)
     k = floor(modulo(azSun,2*pi)/daz)
@@ -77,7 +91,8 @@ contains
     smax = s(i0,j0,k+1)*(1.-a) + s(i0,j0,k+2)*a
     getonehorizon = smax
   end function getonehorizon
-
+  
+  
   elemental function getoneskysize(i,j)
     ! calculates sky size (steradian) from horizons
     use allinterfaces, only: area_spherical_triangle
@@ -98,6 +113,7 @@ contains
     getoneskysize = skysize
   end function getoneskysize
 
+  
   elemental function getoneskysize_v2(i,j)
     ! calculates sky size (steradian) from horizons
     implicit none
@@ -111,8 +127,9 @@ contains
     getoneskysize_v2 = 2*pi-landsize
   end function getoneskysize_v2
 
+  
   elemental function getoneGterm(i,j,alpha,azFac)
-    ! quantity used for specific type of approximation
+    ! calculate land view factor from horizons
     implicit none
     real(8) getoneGterm
     integer, intent(IN) :: i,j
@@ -138,8 +155,8 @@ contains
     getoneGterm = cos(alpha)*G1 + sin(alpha)*G2
     ! getoneGterm should never be negative
   end function getoneGterm
-  
-end module newhorizons
+
+END MODULE newhorizons
 
 
 
@@ -150,18 +167,18 @@ pure subroutine difftopo(NSx,NSy,h,dx,dy,surfaceSlope,azFac)
   ! azFac=+pi/2 sloped toward west
   ! azFac=-pi/2 sloped toward east
   implicit none
-  integer, intent(IN) :: NSx,NSy
-  real(8), intent(IN) :: h(NSx,NSy),dx,dy
-  real(8), intent(OUT), dimension(NSx,NSy) :: surfaceSlope,azFac
+  integer, intent(IN) :: NSx, NSy
+  real(8), intent(IN) :: h(NSx,NSy), dx, dy
+  real(8), intent(OUT), dimension(NSx,NSy) :: surfaceSlope, azFac
   integer i,j
   real(8) sx,sy
 
   do i=2,NSx-1
      do j=2,NSy-1
-        sx=(h(i+1,j)-h(i-1,j))/(2.*dx)
-        sy=(h(i,j+1)-h(i,j-1))/(2.*dy)
-        surfaceSlope(i,j)=atan(sqrt(sx**2+sy**2))
-        azFac(i,j)=atan2(sx,-sy)  ! north is up, clockwise
+        sx = (h(i+1,j)-h(i-1,j))/(2.*dx)
+        sy = (h(i,j+1)-h(i,j-1))/(2.*dy)
+        surfaceSlope(i,j) = atan(sqrt(sx**2+sy**2))
+        azFac(i,j) = atan2(sx,-sy)  ! north is up, clockwise
      enddo
   enddo
 end subroutine difftopo
@@ -173,18 +190,18 @@ pure subroutine difftopo2(h,surfaceSlope,azFac,Mx1,Mx2,My1,My2)
   ! like difftopo but with different input arguments (for cropped domains)
   use filemanager, only : NSx,NSy,dx,dy
   implicit none
-  integer, intent(IN) :: Mx1,Mx2,My1,My2
+  integer, intent(IN) :: Mx1, Mx2, My1, My2
   real(8), intent(IN) :: h(NSx,NSy)
-  real(8), intent(OUT), dimension(Mx1:Mx2,My1:My2) :: surfaceSlope,azFac
-  integer i,j
-  real(8) sx,sy
+  real(8), intent(OUT), dimension(Mx1:Mx2,My1:My2) :: surfaceSlope, azFac
+  integer i, j
+  real(8) sx, sy
 
   do i=max(2,Mx1),min(NSx-1,Mx2)
      do j=max(2,My1),min(NSy-1,My2)
-        sx=(h(i+1,j)-h(i-1,j))/(2.*dx)
-        sy=(h(i,j+1)-h(i,j-1))/(2.*dy)
-        surfaceSlope(i,j)=atan(sqrt(sx**2+sy**2))
-        azFac(i,j)=atan2(sx,-sy)  ! north is up, clockwise
+        sx = (h(i+1,j)-h(i-1,j))/(2.*dx)
+        sy = (h(i,j+1)-h(i,j-1))/(2.*dy)
+        surfaceSlope(i,j) = atan(sqrt(sx**2+sy**2))
+        azFac(i,j) = atan2(sx,-sy)  ! north is up, clockwise
      enddo
   enddo
 end subroutine difftopo2
@@ -201,7 +218,7 @@ elemental subroutine equatorial2horizontal(decl,latitude,HA,sinbeta,azimuth)
 !     azimuth [radians east of north]
 !***********************************************************************
   implicit none
-  real(8), parameter :: pi=3.1415926535897931
+  real(8), parameter :: pi=3.1415926535897932
   real(8), intent(IN) :: decl,latitude,HA
   real(8), intent(OUT) :: sinbeta,azimuth
   real(8) c1,s1,cosbeta,buf
@@ -297,6 +314,7 @@ integer function getmaxfieldsize(NSx,NSy,ffn)
   integer maxsize
   integer cc, i, j, i0_2, j0_2, ierr
 
+  print *,'reading ',ffn
   open(unit=20,file=ffn,status='old',action='read',iostat=ierr)
   if (ierr>0) stop 'getmaxfieldsize: input file not found'
 
@@ -313,3 +331,40 @@ integer function getmaxfieldsize(NSx,NSy,ffn)
   getmaxfieldsize = maxsize
 end function getmaxfieldsize
 
+
+integer function countcolumns()
+  ! counts the number of azimuth rays in horizons file
+  ! incorporates code from Léo https://stackoverflow.com/users/10478255/leo
+  use filemanager, only : sfn
+  implicit none
+ 
+  integer i, io, ierr
+  integer, parameter :: MAX_NUM_OF_COLS=999
+  integer, parameter :: MAX_LINE_LENGTH=10000
+  character(len=MAX_LINE_LENGTH) line
+  double precision, dimension(MAX_NUM_OF_COLS) :: test_array
+       
+  open(unit=20,file=sfn,status='old',action='read',iostat=ierr)
+  if (ierr>0) then
+     print *,sfn
+     stop 'countcolumns: Input file not found'
+  endif
+
+  ! Get first line of file.
+  DO
+    READ(20,'(A)',iostat=io) line
+    IF (io/=0) stop "Error reading file."
+    exit 
+  ENDDO
+
+  CLOSE(20)
+
+  do i=1,MAX_NUM_OF_COLS
+    READ(line,*,iostat=io) test_array(1:i)
+    if(io==-1) exit
+  enddo
+
+  !write(*,*) 'number of columns = ', (i-1) 
+  countcolumns = i-1
+  
+end function countcolumns

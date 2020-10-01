@@ -1,0 +1,25 @@
+Lunar/
+
+Lunar Ice Pump Model
+====================
+
+oscidea1.f90: (main program)
+	ice pump calculations for one location
+
+oscidea_subs.f90:
+	subroutines for ice pump calculations
+
+subl_h2o.f90:
+	set of functions for sublimation rate of H2O ice
+
+
+
+makefile:
+	shows file dependencies
+
+
+
+NOTES
+
+* Lunar exosphere model is found in directory Exospheres/
+* Terrain irradiance model for airless bodies is found in Topo3D/

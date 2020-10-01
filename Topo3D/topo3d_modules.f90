@@ -1,17 +1,7 @@
-module allinterfaces
+MODULE allinterfaces
   ! interfaces from subroutines and functions
 
-  ! begin shadows_subs.f90
-  interface
-     subroutine findallhorizon(h,i0,j0,naz,smax)
-       use filemanager, only : NSx,NSy,RMAX
-       implicit none
-       integer, intent(IN) :: i0,j0,naz
-       real(8), intent(IN) :: h(NSx,NSy)
-       real(8), intent(OUT) :: smax(naz)
-     end subroutine findallhorizon
-  end interface
-  
+  ! begin topo3d_geometry.f90
   interface
      elemental function diffangle(a1,a2)
        real(8) diffangle
@@ -26,17 +16,51 @@ module allinterfaces
        real(8), intent(IN) :: value(nr)
      end subroutine compactoutput
   end interface
-
-  ! begin fieldofview_subs.f90
+  
   interface
-     subroutine findallhorizon_wsort(h,i0,j0,naz,smax,visibility)
-       use filemanager, only : NSx,NSy,RMAX
+     elemental function horizontaldistance1(x1,y1,x2,y2)
+       implicit none
+       real(8) horizontaldistance1
+       real(8), intent(IN) :: x1,y1,x2,y2
+     end function horizontaldistance1
+  end interface
+  
+  interface
+     elemental function azimuth1(x1,y1,x2,y2)
+       implicit none
+       real(8) azimuth1
+       real(8), intent(IN) :: x1,y1,x2,y2
+     end function azimuth1
+  end interface
+
+  interface
+     subroutine downsample(NSx,NSy,h,hhalf)
+       implicit none
+       integer, intent(IN) :: NSx,NSy
+       real(8), intent(IN) :: h(NSx,NSy)
+       real(8), intent(OUT) :: hhalf(NSx/2,NSy/2)
+     end subroutine downsample
+  end interface
+
+  ! begin shadows_subs.f90
+  interface
+     pure subroutine findallhorizon1(h,i0,j0,naz,smax)
+       use filemanager, only : NSx,NSy,dx,dy
        implicit none
        integer, intent(IN) :: i0,j0,naz
        real(8), intent(IN) :: h(NSx,NSy)
        real(8), intent(OUT) :: smax(naz)
-       logical, intent(OUT) :: visibility(NSx,NSy)
-     end subroutine findallhorizon_wsort
+     end subroutine findallhorizon1
+  end interface
+
+  ! begin fieldofview_subs.f90
+  interface
+     pure subroutine difftopo1(NSx,NSy,i,j,h,dx,dy,surfaceSlope,az)
+       implicit none
+       integer, intent(IN) :: NSx, NSy, i, j
+       real(8), intent(IN) :: h(NSx,NSy), dx, dy
+       real(8), intent(OUT) :: surfaceSlope, az
+     end subroutine difftopo1
   end interface
   
   interface
@@ -47,6 +71,15 @@ module allinterfaces
        real(8), intent(IN) :: h(NSx,NSy)
        logical, intent(IN) :: visibility(NSx,NSy)
      end subroutine find3dangle
+  end interface
+  
+  interface
+     elemental function cos_viewing_angle(x0,y0,h00,surfaceSlope,azFac,xB,yB,hB)
+       implicit none
+       real(8) cos_viewing_angle
+       real(8), intent(IN) :: x0, y0, h00, surfaceSlope, azFac
+       real(8), intent(IN) :: xB, yB, hB
+     end function cos_viewing_angle
   end interface
 
   interface
@@ -77,42 +110,6 @@ module allinterfaces
   end interface
 
   interface
-     elemental function horizontaldistance(i1,j1,i2,j2)
-       implicit none
-       real(8) horizontaldistance
-       integer, intent(IN) :: i1,j1,i2,j2
-     end function horizontaldistance
-  end interface
-
-  interface
-     pure function azimuth(i1,j1,i2,j2)
-       implicit none
-       real(8) azimuth
-       integer, intent(IN) :: i1,j1,i2,j2
-     end function azimuth
-  end interface
-
-  interface
-     pure function viewing_angle(i0,j0,i,j,h)
-       use filemanager, only : NSx,NSy,dx,dy
-       implicit none
-       real(8) viewing_angle
-       integer, intent(IN) :: i0,j0,i,j
-       real(8), intent(IN) :: h(NSx,NSy)
-     end function viewing_angle
-  end interface
-
-  interface
-     pure subroutine difftopo1(i,j,h,surfaceSlope,az)
-       use filemanager, only : NSx,NSy,dx,dy
-       implicit none
-       integer, intent(IN) :: i,j
-       real(8), intent(IN) :: h(NSx,NSy)
-       real(8), intent(OUT) :: surfaceSlope,az
-     end subroutine difftopo1
-  end interface
- 
-  interface
      pure function area_spherical_quadrangle(phi,theta)
        implicit none
        real(8), intent(IN) :: phi(4), theta(4)
@@ -140,7 +137,7 @@ module allinterfaces
        implicit none
        integer, intent(IN) :: NSx
        integer, intent(OUT) :: ilower, iupper
-       character(4), intent(OUT) :: extc
+       character(5), intent(OUT) :: extc
      end subroutine slicer
   end interface
   
@@ -176,7 +173,7 @@ module allinterfaces
        integer, intent(IN) :: NSx, NSy
        character(len=*), intent(IN) :: ffn
        integer, intent(IN) :: CCMAX
-       integer, intent(OUT) :: cc(NSx,NSy) ! number of cells in field of view
+       integer, intent(OUT) :: cc(NSx,NSy)
        integer(2), intent(OUT), dimension(NSx,NSy,CCMAX) :: ia, ja
        real(4), intent(OUT), dimension(NSx,NSy,CCMAX) :: dOh
        real(8), intent(OUT) :: landsize(NSx,NSy)
@@ -189,7 +186,7 @@ module allinterfaces
        integer, intent(IN) :: NSx, NSy
        character(len=*), intent(IN) :: vfn
        integer, intent(IN) :: CCMAX
-       integer, intent(OUT) :: cc(NSx,NSy) ! number of cells in field of view
+       integer, intent(OUT) :: cc(NSx,NSy)
        integer(2), intent(OUT), dimension(NSx,NSy,CCMAX) :: ia, ja
        real(4), intent(OUT), dimension(NSx,NSy,CCMAX) :: VF
        real(8), intent(OUT) :: viewsize(NSx,NSy)
@@ -202,6 +199,11 @@ module allinterfaces
        integer, intent(IN) :: NSx,NSy
        character(len=*), intent(IN) :: ffn
      end function getmaxfieldsize
+  end interface
+
+  interface
+     integer function countcolumns()
+     end function countcolumns
   end interface
   
   ! mk_atmosphere.f90
@@ -216,11 +218,11 @@ module allinterfaces
   ! routines in Mars/
   interface
      pure subroutine flux_mars2(R,decl,latitude,HA,fracIR,fracDust, &
-          &   surfaceSlope,azFac,emax,Q,Qscat,Qlw)
+          &   surfaceSlope,azFac,emax,Qdir,Qscat,Qlw)
        implicit none
        real(8), intent(IN) :: R,decl,latitude,HA,surfaceSlope,azFac,emax
        real(8), intent(IN) :: fracIR,fracDust
-       real(8), intent(OUT) :: Q,Qscat,Qlw
+       real(8), intent(OUT) :: Qdir,Qscat,Qlw
      end subroutine flux_mars2
   end interface
 
@@ -244,60 +246,57 @@ module allinterfaces
      end subroutine marsclock24
   end interface
   
-  ! begin multigrid.f90
+  ! topod3d_subs_mars.f90
   interface
-     subroutine downsample(NSx,NSy,h,hhalf)
+     subroutine subsurfaceconduction_mars(T,Tsurf,dtsec,Qn,Qnp1,m,Fsurf,init, &
+          & Tco2frost,thIn,emiss)
        implicit none
-       integer, intent(IN) :: NSx,NSy
-       real(8), intent(IN) :: h(NSx,NSy)
-       real(8), intent(OUT) :: hhalf(NSx/2,NSy/2) ! new dimensions
-     end subroutine downsample
-  end interface
-
-  interface
-     real(8) elemental function horizontaldistance1(x1,y1,x2,y2)
-       implicit none
-       real(8), intent(IN) :: x1,y1,x2,y2
-     end function horizontaldistance1
+       real(8), intent(INOUT) :: T(:), Tsurf, m, Fsurf
+       real(8), intent(IN) :: dtsec,Qn,Qnp1
+       logical, intent(IN) :: init
+       real(8), intent(IN), optional :: Tco2frost, thIn, emiss
+     end subroutine subsurfaceconduction_mars
   end interface
   
   interface
-     real(8) elemental function azimuth1(x1,y1,x2,y2)
+     pure function evap_ingersoll(T,p0)
        implicit none
+       real(8) evap_ingersoll
+       real(8), intent(IN) :: T,p0
+     end function evap_ingersoll
+  end interface
+
+  ! megagrid_make.f90 
+  interface
+     elemental function horizontaldistance_square(x1,y1,x2,y2)
+       implicit none
+       real(8) horizontaldistance_square
        real(8), intent(IN) :: x1,y1,x2,y2
-     end function azimuth1
+     end function horizontaldistance_square
   end interface
 
   interface
-     pure subroutine findallhorizon_MG1(h,i0,j0,naz,smax)
-       use filemanager, only : NSx,NSy,dx,dy
+     integer function findmaxlevel(LMAX)
        implicit none
-       integer, intent(IN) :: i0,j0,naz
-       real(8), intent(IN) :: h(NSx,NSy)
-       real(8), intent(OUT) :: smax(naz)
-     end subroutine findallhorizon_MG1
+       integer, intent(IN) :: LMAX
+     end function findmaxlevel
+  end interface
+  
+  interface
+     subroutine findallgridpoints_MGR(i0,j0,RMG,L)
+       implicit none
+       integer, intent(IN) :: i0, j0, L
+       real(8), intent(IN) :: RMG
+     end subroutine findallgridpoints_MGR
   end interface
 
   interface
-     pure subroutine horizon_MG_core(x0,y0,h00,naz,smax,i,j,h,P)
-       use filemanager, only : NSx,NSy,dx,dy
+     recursive subroutine findallgridpoints_recursive(i,j,x0,y0,RMG,L)
        implicit none
-       real(8), intent(IN) :: x0,y0,h00 
-       integer, intent(IN) :: naz
-       real(8), intent(INOUT) :: smax(naz)
-       integer, intent(IN) :: i,j,P 
-       real(8), intent(IN) :: h(NSx/P,NSy/P)
-     end subroutine horizon_MG_core
-  end interface
-
-  ! cratersQ_*
-  interface
-     subroutine subsurfaceconduction(T,Tsurf,dtsec,Qn,Qnp1,emiss,solarDay)
-       implicit none
-       integer, parameter :: NMAX=1000
-       real(8), intent(INOUT) :: T(NMAX), Tsurf
-       real(8), intent(IN) :: dtsec,Qn,Qnp1,emiss,solarDay
-     end subroutine subsurfaceconduction
+       integer, intent(IN) :: L, i, j
+       real(8), intent(IN) :: x0, y0
+       real(8), intent(IN) :: RMG
+     end subroutine findallgridpoints_recursive
   end interface
   
   ! f90 routines in Common/
@@ -308,6 +307,28 @@ module allinterfaces
      end function flux_wshad
   end interface
 
+  interface
+     subroutine conductionQ(nz,z,dt,Qn,Qnp1,T,ti,rhoc,emiss,Tsurf,Fgeotherm,Fsurf)
+       implicit none
+       integer, intent(IN) :: nz
+       real*8, intent(IN) :: z(nz), dt, Qn, Qnp1
+       real*8, intent(INOUT) :: T(nz), Tsurf
+       real*8, intent(IN) :: ti(nz), rhoc(nz), emiss, Fgeotherm
+       real*8, intent(OUT) :: Fsurf
+     end subroutine conductionQ
+  end interface
+  
+  interface
+     subroutine conductionT(nz,z,dt,T,Tsurf,Tsurfp1,ti,rhoc,Fgeotherm,Fsurf)
+       implicit none
+       integer, intent(IN) :: nz
+       real*8, intent(IN) :: z(nz), dt, Tsurf, Tsurfp1, ti(nz), rhoc(nz)
+       real*8, intent(IN) :: Fgeotherm
+       real*8, intent(INOUT) :: T(nz)
+       real*8, intent(OUT) :: Fsurf
+     end subroutine conductionT
+  end interface
+  
   ! Fortran 77 programs
   interface
      pure subroutine hpsort(n,ra,ind)
@@ -319,30 +340,6 @@ module allinterfaces
   end interface
 
   interface
-     pure subroutine conductionQ(nz,z,dt,Qn,Qnp1,T,ti,rhoc,emiss,Tsurf,Fgeotherm,Fsurf)
-       implicit none
-       integer NMAX
-       parameter (NMAX=1000)
-       integer, intent(IN) :: nz
-       real*8, intent(IN) :: z(NMAX), dt, Qn, Qnp1, ti(NMAX),rhoc(NMAX), emiss, Fgeotherm
-       real*8, intent(INOUT) :: T(NMAX), Tsurf
-       real*8, intent(OUT) :: Fsurf
-     end subroutine conductionQ
-  end interface
-
-  interface
-     pure subroutine conductionT(nz,z,dt,T,Tsurf,Tsurfp1,ti,rhoc,Fgeotherm,Fsurf)
-       implicit none
-       integer NMAX
-       parameter (NMAX=1000)
-       integer, intent(IN) :: nz
-       real*8, intent(IN) :: z(NMAX), dt, T(NMAX), Tsurf, Tsurfp1, ti(NMAX), rhoc(NMAX)
-       real*8, intent(IN) :: Fgeotherm
-       real*8, intent(OUT) :: Fsurf
-     end subroutine conductionT
-  end interface
-  
-  interface
      pure function psv(T)
        implicit none
        real*8, intent(IN) :: T
@@ -350,4 +347,11 @@ module allinterfaces
      end function psv
   end interface
 
-end module allinterfaces
+  interface
+     FUNCTION julday(mm,id,iyyy)
+       INTEGER julday
+       INTEGER, intent(IN) ::id,iyyy,mm
+     end FUNCTION julday
+  end interface
+
+END MODULE allinterfaces

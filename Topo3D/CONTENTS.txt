@@ -7,7 +7,7 @@ shadows.f90: (main program)
 	calculates horizons
 
 fieldofviews.f90: (main program)
-	calculates horizons and field of views
+	calculates horizons and viewfactors
 
 cratersQ_equilbr.f90: (main program)
 	equilibrium surface temperature with 3D shadowing and reflections
@@ -16,9 +16,15 @@ cratersQ_moon.f90: (main program)
 	surface temperature with 3D shadowing and reflections for airless body
 
 cratersQ_mars.f90: (main program)
-	surface temperature with 3D shadowing for Mars
+	surface temperature with 3D shadowing for Mars, using G-approximation
 
-insol_mars.f90: (main program)
+cratersQ_mars_parallel.f90: (main program)
+	parallel version of cratersQ_mars.f90
+
+cratersQ_mars.f90_full: (main program)
+	surface temperature with 3D shadowing and reflections for Mars
+
+insol3d_mars.f90: (main program)
 	3D shadowing for Mars
 
 filemanager.f90:
@@ -30,6 +36,9 @@ topo3d_modules.f90:
 topo3d_common.f90: 
 	subroutines needed by cratersQ_* and by shadows/fieldofviews
 
+topo3d_geometry.f90: 
+	subroutines needed by shadow* and by fieldofview* 
+
 shadow_subs.f90: 
 	subroutines for program shadows
 
@@ -37,7 +46,10 @@ fieldofview_subs.f90:
 	subroutines for program fieldofviews
 
 topo3d_subs.f90: 
-	subroutines for programs cratersQ_*
+	subroutines for programs cratersQ_* that are independent of body
+
+topo3d_subs_mars.f90: 
+	subroutines for programs cratersQ_* for Mars
 
 multigrid.f90:
 	subroutines for multigrid acceleration
@@ -45,8 +57,18 @@ multigrid.f90:
 fieldproperties.f90: (main program)
 	processes geometric information, mostly diagnostics
 
+test_shadows1pt.f90: (main program)
+        calculate horizons for one point (for testing purposes)
+
+makegaussian.c: (main program)
+	creates Gaussian surface
+	(3rd party subroutines from Numerical Recipes are not included)
+
 topo40.xyz: 
 	example input topography
+
+site.par:
+	example input file for cratersQ_mars_parallel.f90
 
 postassemble.cmd:
 	simple shell script that merges output of parallel versions

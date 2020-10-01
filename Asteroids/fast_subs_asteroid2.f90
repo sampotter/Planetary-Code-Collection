@@ -1,17 +1,17 @@
-!*****************************************************
+!************************************************************************
 ! Subroutines for fast asteroid method
 ! written by Norbert Schorghofer 2014-2015
-!*****************************************************
+!************************************************************************
 
 
-subroutine icelayer_asteroid(bigstep,NP,z,porosity,Tinit, &
-     & zdepthP,sigma,Tmean1,Tmean3,Tmin,Tmax,latitude,albedo,ecc,omega,eps,S0)
-!*************************************************************************
+subroutine icelayer_asteroid(bigstep,NP,z,porosity,Tinit,zdepthP,sigma, &
+     & Tmean1,Tmean3,Tmin,Tmax,latitude,albedo,ecc,omega,eps,S0)
+!************************************************************************
 ! bigstep = time step [Earth years]
 ! latitude  [degree]
 ! eps = axis tilt [radians]
 ! S0 = solar constant relative to present
-!*************************************************************************
+!************************************************************************
   use constants, only : d2r, NMAX
   use body, only : icedensity, Tnominal, nz
   use allinterfaces
@@ -29,8 +29,7 @@ subroutine icelayer_asteroid(bigstep,NP,z,porosity,Tinit, &
   real(8) Deff, deltaz, Diff0, Jp, avrhotmp
   real(8), dimension(nz) :: Diff, ypp, avrho, porefill
   real(8), SAVE :: zdepth_old(100)  ! NP<=100
-  integer, external :: gettype
-  real(8), external :: vapordiffusivity, constriction
+  real(8), external :: constriction
 
   do k=1,NP   ! big loop over sites
 
@@ -49,7 +48,7 @@ subroutine icelayer_asteroid(bigstep,NP,z,porosity,Tinit, &
            porefill(j) = sigma(j,k)/(porosity(j)*icedensity)
            Diff(j) = constriction(porefill(j))*Diff(j)
         endif
-     enddo
+     end do
      
      ! run thermal model
      call ajsub_asteroid(latitude(k)*d2r, albedo(k), z, ti, rhocv, & 
@@ -68,20 +67,23 @@ subroutine icelayer_asteroid(bigstep,NP,z,porosity,Tinit, &
         endif
         Deff = deltaz/colint(1./Diff,z,nz,1,typeP-1) 
      endif
-     !call impactstirring(nz,z(:),bigstep,sigma(:,k))  ! turn impact stirring on and off here
-     call icechanges(nz,z(:),typeP,avrho(:),ypp(:),Deff,bigstep,Jp,zdepthP(k),sigma(:,k))
+     ! turn impact stirring on and off here
+     !call impactstirring(nz,z(:),bigstep,sigma(:,k))
+     
+     call icechanges(nz,z(:),typeP,avrho(:),ypp(:),Deff,bigstep,Jp, &
+          &          zdepthP(k),sigma(:,k))
      where(sigma<0.) sigma=0.
      do j=1,nz
         maxsigma = porosity(j)*icedensity
         if (sigma(j,k)>maxsigma) sigma(j,k)=maxsigma
-     enddo
+     end do
 
      ! diagnose
      if (zdepthP(k)>=0.) then
         jump = 0
         do j=1,nz
            if (zdepth_old(k)<z(j).and.zdepthP(k)>z(j)) jump=jump+1
-        enddo
+        end do
      else
         jump=-9
      endif
@@ -94,20 +96,21 @@ subroutine icelayer_asteroid(bigstep,NP,z,porosity,Tinit, &
           &        bigstep,latitude(k),zdepthP(k),avrhotmp,jump,Deff
      zdepth_old(k) = zdepthP(k)
 
-  enddo  ! end of big loop
+  end do  ! end of big loop
 end subroutine icelayer_asteroid
 
 
 
 subroutine ajsub_asteroid(latitude, albedo, z, ti, rhocv, ecc, omega, eps, &
-     &     S0, typeP, Diff, Diff0, rhosatav, Tinit, ypp, Jp, Tmean1, Tmean3, Tmin, Tmaxi)
-!***********************************************************************
+     &     S0, typeP, Diff, Diff0, rhosatav, Tinit, ypp, Jp, &
+     &     Tmean1, Tmean3, Tmin, Tmaxi)
+!************************************************************************
 !  A 1D thermal model that also returns various time-averaged quantities
 !
 !  Tinit = initalize if .true., otherwise use Tmean1 and Tmean3
-!***********************************************************************
+!************************************************************************
   use constants
-  use body, only : EQUILTIME, dt, solsperyear, Fgeotherm, semia, nz, emiss, solarDay
+  use body, only : EQUILTIME, dt, semia, Fgeotherm, nz, emiss, solarDay
   use allinterfaces
   implicit none
   real(8), intent(IN) :: latitude  ! in radians
@@ -124,24 +127,27 @@ subroutine ajsub_asteroid(latitude, albedo, z, ti, rhocv, ecc, omega, eps, &
   real(8) tmax, time, Qn, Qnp1, tdays
   real(8) orbitR, orbitLs, orbitDec, HA
   real(8) Tsurf, Fsurf, T(NMAX)
-  real(8) Tmean0, rhosatav0, rlow , S1, coslat
+  real(8) Tmean0, rhosatav0, rlow , S1, coslat, solsperyear
   real(8), external :: psv
   
   ! initialize
+  solsperyear = sols_per_year(semia,solarDay)
   if (Tinit) then 
-     S1=S0*1365./semia**2  ! must match solar constant defined in flux_noatm
+     S1 = S0*1365./semia**2  ! must match solar constant defined in flux_noatm
      coslat = max(cos(latitude),cos(latitude+eps),cos(latitude-eps))
      Tmean0 = (S1*(1.-albedo)*coslat/(pi*emiss*sigSB))**0.25 ! estimate
      Tmean0 = Tmean0-5.
      if (Tmean0<50.) Tmean0=50.
      print *,Tmean0,S1,latitude,cos(latitude)
-     write(6,*) '# initialized with temperature estimate of',Tmean0,'K'
+     write(*,*) '# initialized with temperature estimate of',Tmean0,'K'
      write(34,*) '# initialized with temperature estimate of',Tmean0,'K'
      T(1:nz) = Tmean0 
      Tsurf = Tmean0
      tmax = 3*EQUILTIME*solsperyear
   else
-     forall(j=1:nz) T(j) = (Tmean1*(z(nz)-z(j))+Tmean3*z(j))/z(nz)
+     do concurrent (j=1:nz)
+        T(j) = (Tmean1*(z(nz)-z(j))+Tmean3*z(j))/z(nz)
+     end do
      Tsurf = Tmean1
      tmax = EQUILTIME*solsperyear
   endif
@@ -176,21 +182,21 @@ subroutine ajsub_asteroid(latitude, albedo, z, ti, rhocv, ecc, omega, eps, &
         rhosatav0 = rhosatav0+psv(Tsurf)/Tsurf
         do j=1,nz
            rhosatav(j) = rhosatav(j)+psv(T(j))/T(j)
-        enddo
+        end do
         nm=nm+1
 
         if (Tsurf<Tmin) Tmin=Tsurf
         if (Tsurf>Tmaxi) Tmaxi=Tsurf
      endif
 
-  enddo  ! end of time loop
+  end do  ! end of time loop
   
   Tmean1 = Tmean1/nm; Tmean3 = Tmean3/nm
   rhosatav0 = rhosatav0/nm; rhosatav(:)=rhosatav(:)/nm
-  rhosatav0 = rhosatav0*18./8314.; rhosatav(:)=rhosatav(:)*18./8314.
+  rhosatav0 = rhosatav0*18./8314.46; rhosatav(:)=rhosatav(:)*18./8314.46
 
   rlow=rhosatav(nz-1)
-  call avmeth(nz, z, rhosatav(:), rhosatav0, rlow, typeP, Diff(:), Diff0, ypp(:), Jp)
+  call avmeth(nz,z,rhosatav(:),rhosatav0,rlow,typeP,Diff(:),Diff0,ypp(:),Jp)
 
   if (typeP<=0) rhosatav = -9999.
 end subroutine ajsub_asteroid
@@ -199,6 +205,7 @@ end subroutine ajsub_asteroid
 
 subroutine outputmoduleparameters
   use body
+  use allinterfaces, only : sols_per_year
   implicit none
   print *,'Global parameters stored in modules'
   print *,'  Ice bulk density',icedensity,'kg/m^3'
@@ -207,16 +214,16 @@ subroutine outputmoduleparameters
   print *,'  Emissivity of surface=',emiss
   print *,'  Thermal model equilibration time',EQUILTIME,'orbits'
   print *,'  Semimajor axis',semia
-  print *,'  Solar day',solarDay,'Sols per year',solsperyear
+  print *,'  Solar day',solarDay,'Sols per year',sols_per_year(semia,solarDay)
   print *,'  Vertical grid: nz=',nz,' zfac=',zfac,'zmax=',zmax
 end subroutine outputmoduleparameters
 
 
 
-subroutine avmeth(nz, z, rhosatav, rhosatav0, rlow, typeP, Diff, Diff0, ypp, Jpump1)
-!***********************************************************************
+subroutine avmeth(nz,z,rhosatav,rhosatav0,rlow,typeP,Diff,Diff0,ypp,Jpump1)
+!************************************************************************
 !  returns 2nd derivative ypp and pumping flux
-!***********************************************************************
+!************************************************************************
   use allinterfaces
   implicit none
   integer, intent(IN) :: nz, typeP
@@ -224,7 +231,6 @@ subroutine avmeth(nz, z, rhosatav, rhosatav0, rlow, typeP, Diff, Diff0, ypp, Jpu
   real(8), intent(IN) :: rhosatav0, rlow, Diff0
   real(8), intent(OUT) :: ypp(nz), Jpump1
   real(8) yp(nz), ap_one, ap(nz)
-  !real(8), external :: deriv1_onesided
 
 !-calculate pumping flux at interface
   call deriv1(z,nz,rhosatav,rhosatav0,rlow,yp)  ! yp also used below
@@ -234,9 +240,9 @@ subroutine avmeth(nz, z, rhosatav, rhosatav0, rlow, typeP, Diff, Diff0, ypp, Jpu
 !-calculate ypp
   call deriv1(z,nz,Diff(:),Diff0,Diff(nz-1),ap)
   if (typeP>0 .and. typeP<nz-2) then
-     ap_one=deriv1_onesided(typeP,z(:),nz,Diff(:))
+     ap_one = deriv1_onesided(typeP,z(:),nz,Diff(:))
      ! print *,typeP,ap(typeP),ap_one
-     ap(typeP)=ap_one
+     ap(typeP) = ap_one
   endif
   call deriv2_simple(z,nz,rhosatav(1:nz),rhosatav0,rlow,ypp(:))
   ypp(:) = ap(:)*yp(1:)+Diff(:)*ypp(:)
@@ -246,9 +252,10 @@ end subroutine avmeth
 
 
 subroutine icechanges(nz,z,typeP,avrho,ypp,Deff,bigstep,Jp,zdepthP,sigma)
-!***********************************************************
+!************************************************************************
 ! advances ice interface and grows pore ice
-!***********************************************************
+!************************************************************************
+  use allinterfaces
   implicit none
   integer, intent(IN) :: nz, typeP
   real(8), intent(IN) :: z(nz), ypp(nz), avrho(nz)
@@ -256,7 +263,6 @@ subroutine icechanges(nz,z,typeP,avrho,ypp,Deff,bigstep,Jp,zdepthP,sigma)
   real(8), intent(INOUT) :: zdepthP, sigma(nz)
   integer j, newtypeP
   real(8) zdepthPnew, buf, bigdtsec, dtcorr, dtstep, dz(nz)
-  integer, external :: gettype
 
   if (typeP<0) return   ! no ice anywhere
   if (zdepthP<0.) print *,'Error: No ice in icechanges'
@@ -272,11 +278,11 @@ subroutine icechanges(nz,z,typeP,avrho,ypp,Deff,bigstep,Jp,zdepthP,sigma)
      sigma(j) = 0.
      if (dtcorr>bigdtsec) then
         dtcorr=bigdtsec
-        write(6,*) '# icechanges: early return',j,typeP-1
+        print *,'# icechanges: early return',j,typeP-1
         newtypeP = j+1
         goto 30
      endif
-  enddo
+  end do
   print *,'# correction time ratio',dtcorr/bigdtsec
 20 continue
 
@@ -286,7 +292,8 @@ subroutine icechanges(nz,z,typeP,avrho,ypp,Deff,bigstep,Jp,zdepthP,sigma)
   zdepthPnew = sqrt(2*buf*(bigdtsec-dtcorr) + zdepthP**2)
   newtypeP = gettype(zdepthPnew,nz,z)
   if (newtypeP>typeP+1) then  ! take two half steps
-     print *,'# icechanges: half step',typeP,newtypeP,sigma(typeP),sigma(newtypeP),zdepthPnew
+     print *,'# icechanges: half step', &
+          & typeP,newtypeP,sigma(typeP),sigma(newtypeP),zdepthPnew
      !dtstep = bigdtsec/2.  ! half the time step
      dtstep = (bigdtsec-dtcorr)/2.  ! half the time step
 
@@ -298,7 +305,7 @@ subroutine icechanges(nz,z,typeP,avrho,ypp,Deff,bigstep,Jp,zdepthP,sigma)
      zdepthPnew = sqrt(2*buf*dtstep + zdepthPnew**2) ! 2nd half
      newtypeP = gettype(zdepthPnew,nz,z)
   endif
-  write(6,*) '# advance of ice table',typeP,zdepthP,newtypeP,zdepthPnew
+  print *,'# advance of ice table',typeP,zdepthP,newtypeP,zdepthPnew
 
   zdepthP = zdepthPnew
   if (zdepthP>z(nz)) zdepthP=-9999.
@@ -309,7 +316,7 @@ subroutine icechanges(nz,z,typeP,avrho,ypp,Deff,bigstep,Jp,zdepthP,sigma)
   if (newtypeP>0) then  
      do j=newtypeP,nz
         sigma(j) = sigma(j) + ypp(j)*bigdtsec
-     enddo
+     end do
   end if
   where(sigma<0.) sigma=0.
 
@@ -328,32 +335,32 @@ subroutine compactoutput(unit,sigma,nz)
      else
         write(unit,'(1x,f7.3)',advance='no') sigma(j)
      endif
-  enddo
+  end do
   write(unit,"('')")
 end subroutine compactoutput
 
 
 
 subroutine assignthermalproperties(nz,Tnom,porosity,ti,rhocv,porefill)
-!*********************************************************
+!************************************************************************
 ! assign thermal properties of soil
 ! specify thermal interia profile here
-!*********************************************************
+!************************************************************************
   use body, only : icedensity
+  use allinterfaces, only : heatcapacity
   implicit none
   integer, intent(IN) :: nz
   real(8), intent(IN) :: Tnom, porosity(nz)
   real(8), intent(OUT) :: ti(nz), rhocv(nz)
   real(8), intent(IN), optional :: porefill(nz)
   real(8), parameter :: rhodry = 2500  ! bulk density
-  real(8), parameter :: kbulk = 2. ! conductivity for zero porosity dry rock
+  !real(8), parameter :: kbulk = 2. ! conductivity for zero porosity dry rock
   real(8), parameter :: kice=4.6, cice=1145   ! 140K
   !real(8), parameter :: kice=4.3, cice=1210   ! 150K
   integer j
   real(8) cdry  ! heat capacity of dry regolith
-  real(8) k(nz)  ! thermal conductivity
-  real(8) thIn
-  real(8), external :: heatcapacity
+  real(8) k(nz) ! thermal conductivity
+  real(8) thIn  ! thermal inertia
 
   if (minval(porosity)<0. .or. maxval(porosity)>0.8) then
      print *,'Error: unreasonable porosity',minval(porosity),maxval(porosity)
@@ -364,20 +371,15 @@ subroutine assignthermalproperties(nz,Tnom,porosity,ti,rhocv,porefill)
   thIn = 15.
   do j=1,nz
      rhocv(j) = (1.-porosity(j))*rhodry*cdry
-     !if (z(j)>0.5) thIn=50.
      k(j) = thIn**2/rhocv(j) 
-     !if (porosity(j)<phi0) then  ! weighted harmonic mean of k and kbulk
-     !   k0 = thIn**2/rhocv(1) 
-     !   k(j) = 1./( (porosity(j)/phi0)/k(j) + (1-porosity(j)/phi0)/kbulk)
-     !endif
-  enddo
+  end do
   if (present(porefill)) then
      do j=1,nz
         if (porefill(j)>0) then
            k(j) = k(j) + porosity(j)*kice*porefill(j)
            rhocv(j) = rhocv(j) + icedensity*cice*porefill(j)*porosity(j)
         endif
-     enddo
+     end do
   end if
 
   ti(1:nz) = sqrt(k(1:nz)*rhocv(1:nz))
@@ -409,7 +411,7 @@ function constriction(porefill)
   if (porefill>0. .and. porefill<1.) then
      ! eta = 1.
      ! eta = 1-porefill
-     eta = (1-porefill)**2  ! Hudson et al., JGR, 2009
+     eta = (1-porefill)**2  ! Hudson et al., JGR 114, E01002 (2009)
   endif
   if (porefill>=1.) eta = 0.
   constriction = eta

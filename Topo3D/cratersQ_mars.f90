@@ -1,40 +1,40 @@
-!***************************************************************************
+!************************************************************************
 ! cratersQ_mars: Mars thermal model with direct insolation, subsurface
-!                conduction, terrain shadowing, and approximate self-heating
-!***************************************************************************
+!                conduction, terrain shadowing, sky irradiance, and
+!                approximate terrain irradiance
+!************************************************************************
 
 
 module miscparams
   ! parameters that never change
   real(8), parameter :: pi=3.1415926535897932, d2r=pi/180.
   real(8), parameter :: sigSB = 5.6704e-8
-  real(8), parameter :: Lco2frost=6.0e5 
+  real(8), parameter :: Lco2frost = 6.0e5 ! [J/kg]
   real(8), parameter :: zero = 0.
-  real(8), parameter :: earthDay = 86400.
-  real(8), parameter :: solsy = 668.60 ! solar days per Mars year
-  real(8), parameter :: solarDay = 88775.244  ! Mars
+  real(8), parameter :: earthDay = 86400. ! [s]
+  real(8), parameter :: solsy = 668.60    ! solar days per Mars year
+  real(8), parameter :: solarDay = 88775.244  ! Mars [s]
 
   ! thermal model parameters
-  real(8), parameter :: Tco2frost=145.  ! adjust according to elevation
-  real(8), parameter :: Tfrost = 200. ! H2O frost point temperature, for diagnostics only
-  real(8), parameter :: fracIR=0.04, fracDust=0.02
+  real(8), parameter :: Tco2frost = 145. ! adjust according to elevation [K]
+  real(8), parameter :: Tfrost = 200.  ! H2O frost point temperature, for diagnostics only [K]
+  real(8), parameter :: fracIR = 0.04, fracDust = 0.02
   real(8), parameter :: emiss = 0.98
-  real(8), parameter :: Fgeotherm = 0.0
-  integer, parameter :: nz=70 
-  real(8), parameter :: thIn = 600.
+  integer, parameter :: nz = 70      ! number of vertical grid points
+  real(8), parameter :: thIn = 600.  ! Thermal inertia [SI units]
 end module miscparams
 
 
-program cratersQ_mars
+PROGRAM cratersQ_mars
   use filemanager
   use allinterfaces
   use miscparams
   use newhorizons
   implicit none
 
-  real(8), parameter :: albedo0=0.12, co2albedo=0.65
-  real(8) :: latitude = -41.6  ! Palikir Crater
-  real(8), parameter :: longitude = 360 - 202.3 ! west longitude
+  real(8), parameter :: albedo0 = 0.12, co2albedo = 0.65
+  real(8) :: latitude = -41.6  ! [degree] Palikir Crater
+  real(8), parameter :: longitude = 360 - 202.3 ! west longitude [degree]
 
   integer nsteps, n, i, j, nm
   real(8) tmax, dt, dtsec, buf
@@ -50,11 +50,9 @@ program cratersQ_mars
   real(8), allocatable, dimension(:,:) :: mmin, h2olast
   real(8) dE, Tsurfold, QIR, Qrefl, Qscat, Qlw
   logical, parameter :: subsurface=.true.  ! control panel
-  !integer, parameter :: NrMP=3   ! number of monitoring points
-  integer k !, i0, j0, i00(NrMP), j00(NrMP)
-  integer, external :: julday
   real(8) jd, LTST, jd_end
   
+  integer k
   real(8) jd_snap(3), jd_themis(2)  ! Julian dates of snapshots
   character(len=20) fns(3), fnt(2)  ! file names of snapshots
 
@@ -68,9 +66,9 @@ program cratersQ_mars
   allocate(Qmean(NSx,NSy), Qmax(NSx,NSy), Tmean(NSx,NSy), Tmaxi(NSx,NSy))
   allocate(frosttime(NSx,NSy), maxfrosttime(NSx,NSy))
   allocate(mmax(NSx,NSy), mmin(NSx,NSy), h2olast(NSx,NSy))
-  Qn=0.; Qnm1=0.; m=0.; Qdirect=0.; skyview=0.
+  Qn=0.; Qnm1=0.; m=0.; Qdirect=0.; skyview=1.
   Qmean=0.; Qmax=0.; Tmean=0.; Tmaxi=0.
-  frosttime=0.; maxfrosttime=0.; mmax=0.; mmin=0
+  frosttime=0.; maxfrosttime=0.; mmax=0.; mmin=1e32
   h2olast=-9.
   
   dt=0.02
@@ -86,7 +84,7 @@ program cratersQ_mars
   write(*,*) 'Nx=',NSx,'Ny=',NSy,'File=',fileext
   write(*,*) 'Region of interest: (',Mx1,',',My1,') x (',Mx2,',',My2,')'
   write(*,*) 'Mean albedo=',sum(albedo)/size(albedo),'Emissivity=',emiss
-  write(*,*) 'CO2 frost temperature=',Tco2frost
+  write(*,*) 'CO2 frost temperature=',Tco2frost,'CO2 albedo=',co2albedo
   write(*,*) 'Reflections:',.FALSE.,'Subsurface:',subsurface
 
   ! Set start date
@@ -102,20 +100,14 @@ program cratersQ_mars
   call difftopo(NSx,NSy,h,dx,dy,surfaceSlope,azFac)
 
   latitude=latitude*d2r
-  Tsurf=200.
   nm=0
 
-  !open(unit=31,file='monitorpoints.dat',action='read')
-  !do k=1,NrMP
-  !   read(31,*) i00(k),j00(k)
-  !enddo
-  !close(31)
-  
   print *,'...reading horizons file...'
   call readhorizons
   do concurrent(i=2:NSx-1, j=2:Nsy-1)
-     skyview(i,j) = getoneskysize_v2(i,j)/(2*pi)
      gterm(i,j) = getoneGterm(i,j,surfaceSlope(i,j),azFac(i,j))
+     skyview(i,j) = getoneskysize_v2(i,j)/(2*pi)  ! =(sky size)/(2*pi)
+     ! skyview(i,j) = 1.-gterm(i,j)  ! weighted by cosine
   end do
   
   if (subsurface) then ! initialize subsurface component
@@ -123,10 +115,13 @@ program cratersQ_mars
      allocate(Tref(nz))
      allocate(Fsurf(NSx,NSy))
      call subsurfaceconduction_mars(Tref(:),buf,dtsec,zero,zero,buf,buf,.true.)
+     !call subsurfaceconduction_mars2(Tref(:),buf,dtsec,zero,zero,buf,buf,.true.,thIn=thIn)
      allocate(Tbottom(NSx,NSy))
      Tbottom(:,:)=-9
      Tsurf(:,:)=-9  ! max 3 digits
      Fsurf(:,:)=0.
+  else
+     Tsurf = 200.
   end if
 
   open(unit=22,file='timeseries_flat.dat',status='unknown',action='write')
@@ -185,10 +180,14 @@ program cratersQ_mars
               if (h(i,j)<-32000) cycle
               call subsurfaceconduction_mars(T(:,i,j),Tsurf(i,j), &
                    & dtsec,Qnm1(i,j),Qn(i,j),m(i,j),Fsurf(i,j),.false.)
+              !call subsurfaceconduction_mars2(T(:,i,j),Tsurf(i,j), &
+              !     & dtsec,Qnm1(i,j),Qn(i,j),m(i,j),Fsurf(i,j),.false.,Tco2frost=Tco2frost,emiss=emiss)
            enddo
         enddo
         call subsurfaceconduction_mars(Tref(:),Tsurf(1,1), &
              & dtsec,Qnm1(1,1),Qn(1,1),m(1,1),Fsurf(1,1),.false.)
+        !call subsurfaceconduction_mars2(Tref(:),Tsurf(1,1), &
+        !     & dtsec,Qnm1(1,1),Qn(1,1),m(1,1),Fsurf(1,1),.false.,Tco2frost=Tco2frost,emiss=emiss)
 
      else  ! no subsurface conduction
         do i=Mx1,Mx2
@@ -196,8 +195,8 @@ program cratersQ_mars
               if (h(i,j)<-32000) cycle
               Tsurf(i,j) = (Qn(i,j)/emiss/sigSB)**0.25
               Tsurfold = (Qnm1(i,j)/emiss/sigSB)**0.25
-              if (Tsurf(i,j)<Tco2frost.or.m(i,j)>0.) then   ! CO2 condensation
-                 Tsurf(i,j)=Tco2frost
+              if (Tsurf(i,j)<Tco2frost .or. m(i,j)>0.) then   ! CO2 condensation
+                 Tsurf(i,j) = Tco2frost
                  dE = - Qn(i,j) + emiss*sigSB*(Tsurf(i,j)**4 + Tsurfold**4)/2.
                  m(i,j) = m(i,j) + dtsec*dE/Lco2frost
               endif
@@ -205,8 +204,8 @@ program cratersQ_mars
         enddo
         Tsurf(1,1) = (Qn(1,1)/emiss/sigSB)**0.25
         Tsurfold = (Qnm1(1,1)/emiss/sigSB)**0.25
-        if (Tsurf(1,1)<Tco2frost.or.m(1,1)>0.) then   ! CO2 condensation
-           Tsurf(1,1)=Tco2frost
+        if (Tsurf(1,1)<Tco2frost .or. m(1,1)>0.) then   ! CO2 condensation
+           Tsurf(1,1) = Tco2frost
            dE = - Qn(1,1) + emiss*sigSB*(Tsurf(1,1)**4 + Tsurfold**4)/2.
            m(1,1) = m(1,1) + dtsec*dE/Lco2frost
         endif
@@ -234,22 +233,16 @@ program cratersQ_mars
 
         write(22,'(f9.3,1x,f7.3,2x,f6.1,1x,f5.1,1x,f6.1)') &
              & sdays,mod(marsLs/d2r,360.d0),Qn(1,1),Tsurf(1,1),m(1,1) ! flat surf ref
-        !do k=1,size(i00)
-           !i0=i00(k); j0=j00(k)
-           !if (i0<Mx1 .or. i0>Mx2 .or. j0<My1 .or. j0>My2) cycle
-           !write(24,'(f9.3,1x,f7.3,2(1x,i4),2x,f6.1,1x,f5.1)') &
-           !     & sdays,mod(marsLs/d2r,360.),i0,j0,Qn(i0,j0),Tsurf(i0,j0)
-        !enddo
      endif
      
      if (sdays > tmax-2*solsy) then  ! longest continuous period below H2O frost point
         where (Tsurf<Tfrost) 
-           frosttime=frosttime+dt
+           frosttime = frosttime+dt
         elsewhere
-           frosttime=0.
+           frosttime = 0.
         end where
         where (frosttime>maxfrosttime)
-           maxfrosttime=frosttime
+           maxfrosttime = frosttime
            h2olast = marsLs  ! last time maxfrosttime increased
         end where
      endif
@@ -277,7 +270,7 @@ program cratersQ_mars
   open(unit=21,file='qmean.dat',status='unknown',action='write')
   do i=Mx1,Mx2
      do j=My1,My2
-        write(21,'(2(i4,1x),f9.2,2x,f6.4,2(1x,f6.1),2(1x,f5.1),3(1x,f7.1),1x,f6.2)') &
+        write(21,'(2(i5,1x),f9.2,2x,f6.4,2(1x,f6.1),2(1x,f5.1),3(1x,f7.1),1x,f6.2)') &
              & i,j,h(i,j),surfaceSlope(i,j),Qmean(i,j),Qmax(i,j), &
              & Tmean(i,j),Tmaxi(i,j),mmax(i,j),maxfrosttime(i,j), &
              & mmin(i,j),h2olast(i,j)
@@ -293,80 +286,7 @@ program cratersQ_mars
      enddo
   endif
   
-end program cratersQ_mars
-
-
-
-subroutine subsurfaceconduction_mars(T,Tsurf,dtsec,Qn,Qnp1,m,Fsurf,init)
-  use miscparams
-  use conductionQ
-  use conductionT
-  implicit none
-  real(8), intent(INOUT) :: T(nz), Tsurf, m, Fsurf
-  real(8), intent(IN) :: dtsec,Qn,Qnp1
-  logical, intent(IN) :: init
-  integer i
-  !real(8), parameter :: zmax=3., zfac=1.05d0  ! adjust
-  real(8), parameter :: zmax=13., zfac=1.05d0  ! with rhoc=thIn*1000 (nz=70, 3x seasonal)
-  real(8) Tinit, delta
-  real(8) Fsurfold, dE, Tsurfold, Told(nz)
-  real(8) z(nz), ti(nz), rhocv(nz)
-
-  if (init) then ! initialize grid
-     ti(:) = thIn  ! adjust
-     !rhocv(:) = 1200.*800.
-     rhocv(:) = thIn*1000.  ! makes skin depth invariant
-     
-     delta = thIn/rhocv(1)*sqrt(solarDay/pi)  ! skin depth
-
-     call setgrid(nz,z,zmax,zfac)
-     if (z(6)>delta) then
-        print *,'WARNING: fewer than 6 points within diurnal skin depth'
-     endif
-     do i=1,nz
-        if (z(i)<delta) cycle
-        print *,i-1,' grid points within diurnal skin depth'
-        exit
-     enddo
-     if (z(1)<1.e-5) print *,'WARNING: first grid point is too shallow'
-     open(unit=30,file='z',status='unknown');
-     write(30,*) (z(i),i=1,nz)
-     close(30)
-
-     write(*,*) 'Subsurface model parameters'
-     write(*,*) '   nz=',nz,' zmax=',zmax,' zfac=',zfac
-     write(*,*) '   Thermal inertia=',thIn,' rho*c=',rhocv(1)
-     write(*,*) '   Diurnal and seasonal skin depths=',delta,delta*sqrt(solsy)
-     write(*,*) '   Geothermal flux=',Fgeotherm
-
-     call conductionT2_init(nz,z,dtsec,ti,rhocv,Fgeotherm)
-     call conductionQ2_init(nz,z,dtsec,ti,rhocv,Fgeotherm)
-     
-     return
-  endif
-  
-  if (Tsurf<=0.) then  ! initialize temperature profile
-     Tinit=200.
-     T(1:nz) = Tinit
-     Tsurf = Tinit
-  endif
-
-  Tsurfold=Tsurf
-  Fsurfold=Fsurf
-  Told(1:nz)=T(1:nz)
-  if (Tsurf>Tco2frost.or.m<=0.) then
-     call conductionQ2(nz,Qn,Qnp1,T,emiss,Tsurf,Fsurf)
-  endif
-  if (Tsurf<Tco2frost.or.m>0.) then   ! CO2 condensation                                              
-     T(1:nz)=Told
-     call conductionT2(nz,Tsurfold,Tco2frost,T,Fsurf)
-     Tsurf=Tco2frost
-     dE = (- Qn - Qnp1 + Fsurfold + Fsurf + &
-          &           emiss*sigSB*(Tsurfold**4+Tsurf**4))/2.
-     m = m + dtsec*dE/Lco2frost
-  endif
-
-end subroutine subsurfaceconduction_mars
+END PROGRAM cratersQ_mars
 
 
 
@@ -382,7 +302,7 @@ subroutine writethemissnapshot(fn,h,Tsurf)
   open(unit=27,file=fn,status='unknown',action='write')
   do i=2,NSx-1
      do j=2,NSy-1
-        write(27,'(2(i4,1x),f9.2,1x,f5.1)') i,j,h(i,j),Tsurf(i,j)
+        write(27,'(2(i5,1x),f9.2,1x,f5.1)') i,j,h(i,j),Tsurf(i,j)
      enddo
   enddo
   close(27)
@@ -402,7 +322,7 @@ subroutine writesnapshot(fn,h,Qdirect,m,Qn)
   open(unit=27,file=fn,status='unknown',action='write')
   do i=2,NSx-1
      do j=2,NSy-1
-        write(27,'(2(i4,1x),f9.2,1x,f6.1,1x,f7.1,1x,f6.1)') &
+        write(27,'(2(i5,1x),f9.2,1x,f6.1,1x,f7.1,1x,f6.1)') &
              & i,j,h(i,j),Qdirect(i,j),m(i,j),Qn(i,j)
      enddo
   enddo

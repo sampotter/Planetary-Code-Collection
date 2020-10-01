@@ -95,12 +95,16 @@ contains
     real*8, intent(IN) :: Qn, Qnp1, emiss
     real*8, intent(INOUT) :: T(nz), Tsurf
     real*8, intent(OUT) :: Fsurf
-    integer i
-    real*8 Tr, r(nz)
+    integer i, iter
+    real*8 Tr, r(nz), Told(nz)
     real*8 arad, brad, ann, annp1, bn
 
-!   Emission
     Tr = Tsurf                !   'reference' temperature
+    iter = 0
+    Told(:) = T(:)
+30  continue  ! in rare case of iterative correction
+
+!   Emission
     arad = -3.*emiss*sigSB*Tr**4
     brad = 2.*emiss*sigSB*Tr**3
     ann = (Qn-arad)/(k1+brad)
@@ -111,18 +115,29 @@ contains
 !   Set RHS         
     r(1) = gamma(1)*(annp1+ann) + &
          &     (1.-alpha(1)-gamma(1)+gamma(1)*bn)*T(1) + alpha(1)*T(2)
-    forall(i=2:nz-1)
+    do concurrent (i=2:nz-1)
        r(i) = gamma(i)*T(i-1) + (1.-alpha(i)-gamma(i))*T(i) + alpha(i)*T(i+1)
-    end forall
+    end do
     r(nz) = gamma(nz)*T(nz-1) + (1.-gamma(nz))*T(nz) + r_geo
     
 !   Solve for T at n+1
     call tridag(a,b,c,r,T,nz) ! update by tridiagonal inversion
     
     Tsurf = 0.5*(annp1 + bn*T(1) + T(1)) ! (T0+T1)/2
+
+    ! iterative predictor-corrector
+    if ((Tsurf > 1.2*Tr .or. Tsurf<0.8*Tr) .and. iter<10) then  ! linearization error expected
+       ! redo until Tr is within 20% of new surface temperature
+       ! (under most circumstances, the 20% threshold is never exceeded)
+       iter = iter+1
+       Tr = sqrt(Tr*Tsurf)  ! linearize around an intermediate temperature
+       T(:) = Told(:)
+       goto 30
+    endif
+    
     Fsurf = -2*k1*(T(1)-Tsurf)
     
   end subroutine conductionQ2
 
-  ! note that alpha(1) and gamma(1) for conductionT are not the same as for conductionQ
+  ! note that alpha(1) and gamma(1) in conductionT are not the same as in conductionQ
 end module conductionQ

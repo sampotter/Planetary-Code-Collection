@@ -1,10 +1,63 @@
 ChangeLog
 
-17 May 2019: Topo3D/  switched from storing subtended angles to viewfactors, which saves a factor of cos(v) later and ultimately provides a speedup by a factor of several.
+18 Jul 2020: Release v1.1.7 
+
+10 Jul 2020: merged psv + psv2 + psv3, and changed default parameterization to psv2.
+
+2 Jul 2020: renamed Exosphere/ into Exospheres/
+
+29 Jun 2020: added basic lunar ice pump code to Lunar/. Lunar/ is a new directory that will contain miscellaneous model code for the Moon. The lunar exosphere model will stay in Exosphere/ and the 3D terrain irradiance model will stay in Topo3D/.
+
+21 Jun 2020: added subl_h2o, although for now it's an orphan.
+
+27 May 2020: changed psv3, added psv2 (parametrizations for saturation vapor pressure)
+
+22 May 2020: added patm as input to Mars/jsubv; changed default hemispheric Tco2frost temperatures
+
+May 2020: Re-calculated mean annual surface temperatures on Mars over 21 Myr and added them to the archive under Mars/MilankOutput/
+
+16 May 2020: flux -> flux_mars77 in jsubv. This was the last occurrence of the function flux, and the legendary function flux was removed from the collection. It is superseded by subroutine mars_flux2, which provides a consistent treatment of the sky irradiance for an obstructed sky. For horizontal and unobstructed ground flux_mars77 can be used.
+
+In this process, I realized that different parts of the program collection used different conventions for the slope orientation. In functions flux and flux_noatm, zero slope azimuth meant north-facing; in flux_mars2 and flux_wshad zero slope azimuth meant south-facing. With function flux gone, the convention in flux_noatm was changed. Now zero slope azimuth uniformly means south-facing (the azimuth of the direction of steepest decent).
+
+May 2020: dusted off mars_mapiqh2v, renamed it to mars_mapi2p, and added example output in Test/
+
+24/25 Apr 2020: revised the type of body parameters in fast_modules_asteroid, so asteroid_fast? can be more easily used with other bodies.
+
+14 Apr 2020: dug up analytical solution to heat equation with Stefan-Boltzmann law as boundary condition; added to UserGuide section 1.1. 
+
+28 Feb 2020: added tempr_driver.f90 (was used to make Fig. 3 in my 2008 Milankovitch paper)
+
+16 Jan 2020: added makegaussian.c
+
+31 Dec 2019: Topo3D/ changed grid downsampling from 4 neighbors to 8 neighbors
+
+30 Nov 2019: added Armand distribution as option for initial velocities in Exosphere/montecarlo.f90
+
+22 Oct 2019: flux -> flux_mars77  in jsub, mars_mapi, mars_mapt2, and fast_subs_mars
+Functions flux and flux_mars77 do not return the exact same results, because in flux_mars77 the atmospheric short-wavelength scattered irradiance is multiplied with (1-albedo).
+
+21 Oct 2019: Added Mars/Tests/
+
+12 Oct 2019: Release v1.1.6  doi:10.5281/zenodo.3483924
+
+23 Sep 2019: added C version of conductionQ and its dependencies
+
+20 Sep 2019: The long-used and much-used subroutine conductionQ received an upgrade. It now iterates when the surface temperature, which is the initial value for the linearization of the thermal radiation term, changes too fast. It was also converted from Fortran 77 to Fortran 90 (or Fortran 2008 actually). The old version of conductionQ is still available in release 1.1.5 and all earlier releases. The new version is conductionQ.f90. The change has also been propagated into conductionQ2.f90
+
+Sep 2019: internal restructuring of horizons and viewfactor calculations, without external consequence
+
+30 Aug 2019: changed definition of viewfactor by a factor of pi, so a half-sphere integrates to 1.
+
+Aug 2019: fixed a bug in fieldofview_subs.f90 and redid test case
+
+28 Jun 2019: added two more variants of cratersQ_mars
+
+17 May 2019: Topo3D/  switched from storing subtended angles to storing viewfactors, which saves a factor of cos(v) later and ultimately provides a speedup by a factor of several.
 
 May 2019: Updated parts of Topo3D/Test/ and the agreement with the analytical solution improved
 
-8 May 2019: Release v1.1.5  do:10.5281/zenodo.2678125
+8 May 2019: Release v1.1.5  doi:10.5281/zenodo.2678125
 
 Apr 2019: work in Topo3D/ directory:
 readhorizons can now read cropped domains; lots of renaming in the Topo3D/ directory to enhance usability; readdem has moved from topos.f90 to crater_common.f90, because input path is now defined in filemanager.
